@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== HELPER FUNCTIONS ====================
+    
+    // Vérifier si l'utilisateur est connecté
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Vérifier si l'utilisateur est propriétaire
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Récupérer les données d'un trajet
+    function getTripData(tripId) {
+      return get(/databases/$(database)/documents/trajets/$(tripId)).data;
+    }
+    
+    // Vérifier si l'utilisateur est le conducteur du trajet
+    function isTripDriver(tripId) {
+      return isSignedIn() && getTripData(tripId).conducteurId == request.auth.uid;
+    }
+    
+    // ==================== USERS COLLECTION ====================
+    match /users/{userId} {
+      // Tout le monde peut lire les profils publics
+      allow read: if isSignedIn();
+      
+      // Seul le propriétaire peut créer son profil
+      allow create: if isOwner(userId);
+      
+      // Seul le propriétaire peut modifier son profil
+      allow update: if isOwner(userId);
+      
+      // Seul le propriétaire peut supprimer son profil
+      allow delete: if isOwner(userId);
+    }
+    
+    // ==================== TRAJETS COLLECTION ====================
+    match /trajets/{tripId} {
+      // Tout le monde peut voir les trajets
+      allow read: if isSignedIn();
+      
+      // Seul un utilisateur connecté peut créer un trajet
+      // Le conducteurId doit correspondre à l'utilisateur connecté
+      allow create: if isSignedIn() && 
+                      request.resource.data.conducteurId == request.auth.uid &&
+                      request.resource.data.placesDisponibles > 0 &&
+                      request.resource.data.prix >= 0;
+      
+      // Seul le conducteur peut modifier son trajet
+      allow update: if isSignedIn() && 
+                      resource.data.conducteurId == request.auth.uid;
+      
+      // Seul le conducteur peut supprimer son trajet
+      allow delete: if isSignedIn() && 
+                      resource.data.conducteurId == request.auth.uid;
+    }
+    
+    // ==================== RESERVATIONS COLLECTION ====================
+    match /reservations/{reservationId} {
+      // Le passager et le conducteur peuvent voir la réservation
+      allow read: if isSignedIn() && (
+        resource.data.passagerId == request.auth.uid ||
+        isTripDriver(resource.data.trajetId)
+      );
+      
+      // Seul un passager peut créer une réservation pour lui-même
+      allow create: if isSignedIn() && 
+                      request.resource.data.passagerId == request.auth.uid &&
+                      request.resource.data.nombrePlaces > 0 &&
+                      // Vérifier que le passager n'est pas le conducteur
+                      getTripData(request.resource.data.trajetId).conducteurId != request.auth.uid;
+      
+      // Le passager peut modifier sa réservation (annuler)
+      // Le conducteur peut modifier le statut (confirmer/refuser)
+      allow update: if isSignedIn() && (
+        resource.data.passagerId == request.auth.uid ||
+        isTripDriver(resource.data.trajetId)
+      );
+      
+      // Le passager et le conducteur peuvent supprimer la réservation
+      allow delete: if isSignedIn() && (
+        resource.data.passagerId == request.auth.uid ||
+        isTripDriver(resource.data.trajetId)
+      );
+    }
+    
+    // ==================== EVALUATIONS COLLECTION ====================
+    match /evaluations/{ratingId} {
+      // Tout le monde peut voir les évaluations
+      allow read: if isSignedIn();
+      
+      // Seul l'évaluateur peut créer son évaluation
+      // Une seule évaluation par trajet et par évalué
+      allow create: if isSignedIn() && 
+                      request.resource.data.evaluateurId == request.auth.uid &&
+                      request.resource.data.note >= 1 &&
+                      request.resource.data.note <= 5;
+      
+      // Seul l'évaluateur peut modifier son évaluation
+      allow update: if isOwner(resource.data.evaluateurId);
+      
+      // Seul l'évaluateur peut supprimer son évaluation
+      allow delete: if isOwner(resource.data.evaluateurId);
+    }
+    
+    // ==================== MESSAGES COLLECTION ====================
+    match /messages/{messageId} {
+      // Seuls l'expéditeur et le destinataire peuvent voir le message
+      allow read: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      
+      // Seul l'expéditeur peut créer un message
+      allow create: if isSignedIn() && 
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.senderId != request.resource.data.receiverId;
+      
+      // Personne ne peut modifier un message
+      allow update: if false;
+      
+      // Seul l'expéditeur peut supprimer son message
+      allow delete: if isOwner(resource.data.senderId);
+    }
+  }
+}
