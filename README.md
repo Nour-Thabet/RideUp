@@ -1,4 +1,4 @@
-# 🚗 Application de Covoiturage - Tunisie
+# 🚗 Application de Covoiturage
 
 Application mobile de covoiturage développée avec Flutter pour faciliter le partage de trajets en Tunisie.
 
@@ -36,44 +36,4 @@ Application mobile de covoiturage développée avec Flutter pour faciliter le pa
 - Android Studio / Xcode
 - Compte Firebase
 
-### Étapes d'installation
-
-1. Clonez le repository :
-```bash
-git clone https://github.com/votre-username/covoiturage-tunisie.git
-cd covoiturage-tunisie
-```
-
-2. Installez les dépendances :
-```bash
-flutter pub get
-```
-
-3. Configurez Firebase :
-   - Créez un projet Firebase
-   - Téléchargez `google-services.json` (Android) et `GoogleService-Info.plist` (iOS)
-   - Placez-les dans les dossiers appropriés
-   - Générez `firebase_options.dart` avec FlutterFire CLI
-
-4. Lancez l'application :
-```bash
-flutter run
-```
-
-# covoiturage
-
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
 
