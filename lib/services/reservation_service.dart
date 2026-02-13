@@ -9,6 +9,8 @@ class ReservationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
   final TripService _tripService = TripService();
+  //************************ */
+  final NotificationService _notificationService = NotificationService();
 
   // Collection des réservations
   CollectionReference get _reservationsCollection =>
@@ -41,6 +43,14 @@ class ReservationService {
       DocumentReference docRef = await _reservationsCollection.add(
         newReservation.toFirestore(),
       );
+      //********************************
+      // */
+      await _notificationService.notifyNewReservation(
+        conducteurId: conducteurId,
+        passagerNom: 'Un passager', // (optionnel : vrai nom plus tard)
+        trajetId: trajetId,
+        reservationId: docRef.id,
+      );
 
       // Réduire les places disponibles dans le trajet
       await _tripService.reducePlacesDisponibles(trajetId, nombrePlaces);
@@ -56,9 +66,8 @@ class ReservationService {
   // ==================== OBTENIR UNE RÉSERVATION PAR ID ====================
   Future<Reservation?> getReservationById(String reservationId) async {
     try {
-      DocumentSnapshot doc = await _reservationsCollection
-          .doc(reservationId)
-          .get();
+      DocumentSnapshot doc =
+          await _reservationsCollection.doc(reservationId).get();
 
       if (doc.exists) {
         return Reservation.fromFirestore(doc);
@@ -144,9 +153,8 @@ class ReservationService {
   Future<void> refuserReservation(String reservationId, String tripId) async {
     try {
       // Récupérer la réservation pour connaître le nombre de places
-      DocumentSnapshot reservationDoc = await _reservationsCollection
-          .doc(reservationId)
-          .get();
+      DocumentSnapshot reservationDoc =
+          await _reservationsCollection.doc(reservationId).get();
 
       if (!reservationDoc.exists) {
         throw Exception('Réservation introuvable');
@@ -183,9 +191,8 @@ class ReservationService {
       }
 
       // Récupérer la réservation
-      DocumentSnapshot reservationDoc = await _reservationsCollection
-          .doc(reservationId)
-          .get();
+      DocumentSnapshot reservationDoc =
+          await _reservationsCollection.doc(reservationId).get();
 
       if (!reservationDoc.exists) {
         throw Exception('Réservation introuvable');
@@ -251,9 +258,8 @@ class ReservationService {
   ) async {
     try {
       // Récupérer la réservation
-      DocumentSnapshot reservationDoc = await _reservationsCollection
-          .doc(reservationId)
-          .get();
+      DocumentSnapshot reservationDoc =
+          await _reservationsCollection.doc(reservationId).get();
 
       if (!reservationDoc.exists) {
         throw Exception('Réservation introuvable');
@@ -315,8 +321,7 @@ class ReservationService {
       QuerySnapshot snapshot = await _reservationsCollection
           .where('passagerId', isEqualTo: passagerId)
           .where('trajetId', isEqualTo: trajetId)
-          .where('statut', whereIn: ['en_attente', 'confirmee'])
-          .get();
+          .where('statut', whereIn: ['en_attente', 'confirmee']).get();
 
       return snapshot.docs.isNotEmpty;
     } catch (e) {
@@ -369,9 +374,8 @@ class ReservationService {
       }
 
       // Récupérer la réservation
-      DocumentSnapshot reservationDoc = await _reservationsCollection
-          .doc(reservationId)
-          .get();
+      DocumentSnapshot reservationDoc =
+          await _reservationsCollection.doc(reservationId).get();
 
       if (!reservationDoc.exists) {
         throw Exception('Réservation introuvable');

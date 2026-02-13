@@ -6,13 +6,14 @@ import '../models/user.dart';
 import '../services/reservation_service.dart';
 import '../widgets/map_widget.dart';
 import 'chat_screen.dart';
+import '../widgets/avatar_widget.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final Trip trip;
   final User? conducteur;
 
   const TripDetailScreen({Key? key, required this.trip, this.conducteur})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
@@ -242,73 +243,138 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       const SizedBox(height: 24),
 
                       // Conducteur
+                      // Conducteur
                       if (widget.conducteur != null) ...[
                         const Text(
                           'Conducteur',
                           style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
                         Card(
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              radius: 30,
-                              backgroundColor: Colors.blue.shade100,
-                              child: Text(
-                                widget.conducteur!.initiales,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              widget.conducteur!.nomComplet,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: widget.conducteur!.nombreAvis > 0
-                                ? Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.star,
-                                        size: 16,
-                                        color: Colors.orange,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    AvatarWidget(
+                                      // ✅ UTILISER AVATARWIDGET
+                                      photoUrl: widget.conducteur!.photoUrl,
+                                      initiales: widget.conducteur!.initiales,
+                                      radius: 30,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.conducteur!.nomComplet,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          if (widget.conducteur!.nombreAvis > 0)
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.star,
+                                                    size: 16,
+                                                    color: Colors.amber),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${widget.conducteur!.noteMoyenne.toStringAsFixed(1)} '
+                                                  '(${widget.conducteur!.nombreAvis} avis)',
+                                                ),
+                                              ],
+                                            )
+                                          else
+                                            const Text('Nouveau conducteur'),
+                                        ],
                                       ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${widget.conducteur!.noteMoyenne.toStringAsFixed(1)} '
-                                        '(${widget.conducteur!.nombreAvis} avis)',
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.message,
+                                          color: Colors.blue),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ChatScreen(
+                                              otherUserId:
+                                                  widget.trip.conducteurId,
+                                              trajetId: widget.trip.id,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+
+                                // ✅ AFFICHER LES INFOS DU VÉHICULE
+                                if (widget.conducteur!.marqueVehicule != null ||
+                                    widget.conducteur!.immatriculation !=
+                                        null) ...[
+                                  const Divider(height: 24),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.directions_car,
+                                          color: Colors.blue),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (widget.conducteur!
+                                                        .marqueVehicule !=
+                                                    null &&
+                                                widget.conducteur!
+                                                        .modeleVehicule !=
+                                                    null)
+                                              Text(
+                                                '${widget.conducteur!.marqueVehicule} ${widget.conducteur!.modeleVehicule}',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                            if (widget.conducteur!
+                                                    .couleurVehicule !=
+                                                null)
+                                              Text(
+                                                widget.conducteur!
+                                                    .couleurVehicule!,
+                                                style: TextStyle(
+                                                    color: Colors.grey[600]),
+                                              ),
+                                            if (widget.conducteur!
+                                                    .immatriculation !=
+                                                null)
+                                              Text(
+                                                widget.conducteur!
+                                                    .immatriculation!,
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontFamily: 'Monospace',
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ],
-                                  )
-                                : const Text('Nouveau conducteur'),
-                            trailing: IconButton(
-                              icon: const Icon(
-                                Icons.message,
-                                color: Colors.blue,
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ChatScreen(
-                                      otherUserId: widget.trip.conducteurId,
-                                      trajetId: widget.trip.id,
-                                    ),
                                   ),
-                                );
-                              },
+                                ],
+                              ],
                             ),
                           ),
                         ),
                         const SizedBox(height: 24),
                       ],
-
                       // Préférences
                       const Text(
                         'Préférences du trajet',
@@ -476,8 +542,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 ),
                               ),
                               IconButton(
-                                onPressed:
-                                    _nombrePlaces <
+                                onPressed: _nombrePlaces <
                                         widget.trip.placesDisponibles
                                     ? () => setState(() => _nombrePlaces++)
                                     : null,

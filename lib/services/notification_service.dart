@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/notification.dart';
 
 class NotificationService {
@@ -34,10 +36,47 @@ class NotificationService {
       );
 
       print('✅ Notification créée: ${docRef.id}');
+
+      // Envoyer la notification push FCM
+      await _sendPushNotification(userId, titre, message, data);
+
       return docRef.id;
     } catch (e) {
       print('❌ Erreur création notification: $e');
       return null;
+    }
+  }
+
+  // ==================== ENVOYER UNE NOTIFICATION PUSH FCM ====================
+  Future<void> _sendPushNotification(
+    String userId,
+    String titre,
+    String message,
+    Map<String, dynamic>? data,
+  ) async {
+    try {
+      // Récupérer le FCM Token de l'utilisateur
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(userId).get();
+
+      if (!userDoc.exists) {
+        print('⚠️ Utilisateur introuvable: $userId');
+        return;
+      }
+
+      String? fcmToken = userDoc.get('fcmToken');
+
+      if (fcmToken == null || fcmToken.isEmpty) {
+        print('⚠️ Pas de FCM Token pour l\'utilisateur: $userId');
+        return;
+      }
+
+      // TODO: Implémenter l'envoi via Cloud Functions ou votre backend
+      // Cette partie nécessite un serveur backend ou une Cloud Function
+      print('📤 FCM Token trouvé: $fcmToken');
+      print('📤 Prêt à envoyer: $titre - $message');
+    } catch (e) {
+      print('❌ Erreur envoi push notification: $e');
     }
   }
 
@@ -116,8 +155,8 @@ class NotificationService {
     String emoji = note >= 4.5
         ? '🌟'
         : note >= 3.5
-        ? '⭐'
-        : '⚠️';
+            ? '⭐'
+            : '⚠️';
     await createNotification(
       userId: userId,
       type: 'rating',
@@ -313,44 +352,6 @@ class NotificationService {
       print('✅ Toutes les notifications supprimées');
     } catch (e) {
       print('❌ Erreur suppression toutes notifications: $e');
-    }
-  }
-
-  // ==================== STATISTIQUES ====================
-
-  Future<Map<String, int>> getNotificationStats() async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return {};
-
-      QuerySnapshot snapshot = await _notificationsCollection
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      Map<String, int> stats = {
-        'total': 0,
-        'reservation': 0,
-        'confirmation': 0,
-        'refus': 0,
-        'message': 0,
-        'rating': 0,
-        'annulation': 0,
-        'unread': 0,
-      };
-
-      for (var doc in snapshot.docs) {
-        AppNotification notif = AppNotification.fromFirestore(doc);
-        stats['total'] = (stats['total'] ?? 0) + 1;
-        stats[notif.type] = (stats[notif.type] ?? 0) + 1;
-        if (!notif.isRead) {
-          stats['unread'] = (stats['unread'] ?? 0) + 1;
-        }
-      }
-
-      return stats;
-    } catch (e) {
-      print('❌ Erreur stats notifications: $e');
-      return {};
     }
   }
 

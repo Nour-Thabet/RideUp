@@ -9,7 +9,7 @@ class LocationService {
   static const String _nominatimUrl = 'https://nominatim.openstreetmap.org';
 
   // User-Agent requis par Nominatim
-  static const String _userAgent = 'CovoiturageApp/1.0';
+  static const String _userAgent = 'RideUpApp/1.0 (contact@rideup.tn)';
 
   // Vérifier et demander les permissions de localisation
   Future<bool> checkAndRequestPermission() async {
@@ -60,6 +60,9 @@ class LocationService {
           AppGeoPoint(
             latitude: position.latitude,
             longitude: position.longitude,
+            address: 'Position actuelle',
+            city: '',
+            country: 'Tunisie',
           );
     } catch (e) {
       print('Erreur lors de l\'obtention de la localisation: $e');
@@ -67,7 +70,7 @@ class LocationService {
     }
   }
 
-  // Reverse Geocoding : Coordonnées → Adresse (Nominatim)
+  // Reverse Geocoding : Coordonnées → Adresse (Nominatim) avec support multilingue
   Future<AppGeoPoint?> reverseGeocode(double latitude, double longitude) async {
     try {
       final url = Uri.parse(
@@ -75,19 +78,25 @@ class LocationService {
         'lat=$latitude&'
         'lon=$longitude&'
         'format=json&'
-        'addressdetails=1',
+        'addressdetails=1&'
+        'accept-language=fr,en,ar&'
+        'namedetails=1',
       );
 
-      final response = await http.get(url, headers: {'User-Agent': _userAgent});
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': _userAgent,
+          'Accept-Language': 'fr,en,ar;q=0.9',
+        },
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        String? address = data['display_name'];
-        String? city = data['address']?['city'] ??
-            data['address']?['town'] ??
-            data['address']?['village'];
-        String? country = data['address']?['country'];
+        String? address = _extractFrenchAddress(data);
+        String? city = _extractFrenchCity(data);
+        String? country = data['address']?['country'] ?? 'Tunisie';
 
         return AppGeoPoint(
           latitude: latitude,
@@ -104,21 +113,35 @@ class LocationService {
     }
   }
 
-  // Geocoding : Adresse → Coordonnées (Nominatim)
+  // Geocoding : Adresse → Coordonnées (Nominatim) avec support multilingue
   Future<List<AppGeoPoint>> searchAddress(String query) async {
     try {
+      if (query.trim().isEmpty) return [];
+
+      // Normaliser la requête (convertir arabe en français)
+      final cleanQuery = _normalizeQuery(query.trim());
+
       // Attendre 1 seconde pour respecter la politique d'utilisation de Nominatim
       await Future.delayed(const Duration(seconds: 1));
 
       final url = Uri.parse(
         '$_nominatimUrl/search?'
-        'q=${Uri.encodeComponent(query)}&'
+        'q=${Uri.encodeComponent(cleanQuery)}&'
         'format=json&'
         'addressdetails=1&'
-        'limit=5',
+        'limit=10&'
+        'countrycodes=tn&'
+        'accept-language=fr,en,ar&'
+        'namedetails=1',
       );
 
-      final response = await http.get(url, headers: {'User-Agent': _userAgent});
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': _userAgent,
+          'Accept-Language': 'fr,en,ar;q=0.9',
+        },
+      );
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -127,11 +150,9 @@ class LocationService {
           return AppGeoPoint(
             latitude: double.parse(item['lat']),
             longitude: double.parse(item['lon']),
-            address: item['display_name'],
-            city: item['address']?['city'] ??
-                item['address']?['town'] ??
-                item['address']?['village'],
-            country: item['address']?['country'],
+            address: _extractFrenchName(item),
+            city: _extractFrenchCity(item),
+            country: item['address']?['country'] ?? 'Tunisie',
           );
         }).toList();
       }
@@ -140,6 +161,140 @@ class LocationService {
       print('Erreur lors du geocoding: $e');
       return [];
     }
+  }
+
+  /// Extraire le nom français d'un résultat Nominatim
+  String _extractFrenchName(Map<String, dynamic> result) {
+    final nameDetails = result['namedetails'] as Map<String, dynamic>?;
+
+    // Priorité : name:fr > name:en > name
+    if (nameDetails != null) {
+      if (nameDetails.containsKey('name:fr')) return nameDetails['name:fr'];
+      if (nameDetails.containsKey('name:en')) return nameDetails['name:en'];
+      if (nameDetails.containsKey('name')) return nameDetails['name'];
+    }
+
+    // Sinon, construire à partir de l'adresse
+    final address = result['address'] as Map<String, dynamic>?;
+    if (address != null) {
+      List<String> parts = [];
+      if (address.containsKey('road')) parts.add(address['road']);
+      if (address.containsKey('suburb')) parts.add(address['suburb']);
+      if (address.containsKey('city')) parts.add(address['city']);
+      if (address.containsKey('town')) parts.add(address['town']);
+      if (address.containsKey('village')) parts.add(address['village']);
+      if (parts.isNotEmpty) return parts.join(', ');
+    }
+
+    return result['display_name'] ?? 'Lieu inconnu';
+  }
+
+  /// Extraire le nom de ville en français
+  String _extractFrenchCity(Map<String, dynamic> result) {
+    final address = result['address'] as Map<String, dynamic>?;
+    if (address == null) return '';
+
+    return address['city'] ??
+        address['town'] ??
+        address['village'] ??
+        address['municipality'] ??
+        '';
+  }
+
+  /// Extraire l'adresse complète en français
+  String _extractFrenchAddress(Map<String, dynamic> data) {
+    final address = data['address'] as Map<String, dynamic>?;
+    if (address != null) {
+      List<String> parts = [];
+      if (address.containsKey('house_number'))
+        parts.add(address['house_number']);
+      if (address.containsKey('road')) parts.add(address['road']);
+      if (address.containsKey('suburb')) parts.add(address['suburb']);
+      if (address.containsKey('city')) parts.add(address['city']);
+      if (address.containsKey('town')) parts.add(address['town']);
+      if (address.containsKey('village')) parts.add(address['village']);
+      return parts.isNotEmpty ? parts.join(', ') : data['display_name'] ?? '';
+    }
+    return data['display_name'] ?? '';
+  }
+
+  /// Mapping arabe → français pour les villes tunisiennes
+  String _normalizeQuery(String query) {
+    final Map<String, String> cityMapping = {
+      'تونس': 'Tunis',
+      'صفاقس': 'Sfax',
+      'سوسة': 'Sousse',
+      'القيروان': 'Kairouan',
+      'بنزرت': 'Bizerte',
+      'قابس': 'Gabès',
+      'أريانة': 'Ariana',
+      'قفصة': 'Gafsa',
+      'المنستير': 'Monastir',
+      'تطاوين': 'Tataouine',
+      'قبلي': 'Kebili',
+      'المهدية': 'Mahdia',
+      'مدنين': 'Medenine',
+      'نابل': 'Nabeul',
+      'توزر': 'Tozeur',
+      'جندوبة': 'Jendouba',
+      'الكاف': 'El Kef',
+      'سليانة': 'Siliana',
+      'زغوان': 'Zaghouan',
+      'باجة': 'Béja',
+      'القصرين': 'Kasserine',
+      'سيدي بوزيد': 'Sidi Bouzid',
+      'المرسى': 'La Marsa',
+      'قرطاج': 'Carthage',
+      'حمام الأنف': 'Hammam-Lif',
+      'رادس': 'Radès',
+      'بن عروس': 'Ben Arous',
+    };
+
+    String normalized = query;
+    cityMapping.forEach((arabic, french) {
+      if (normalized.contains(arabic)) {
+        normalized = normalized.replaceAll(arabic, french);
+      }
+    });
+    return normalized;
+  }
+
+  /// Liste des grandes villes tunisiennes (pour suggestions)
+  List<String> getTunisianCities() {
+    return [
+      'Tunis',
+      'Sfax',
+      'Sousse',
+      'Kairouan',
+      'Bizerte',
+      'Gabès',
+      'Ariana',
+      'Gafsa',
+      'Monastir',
+      'La Marsa',
+      'Hammam-Lif',
+      'Ben Arous',
+      'Nabeul',
+      'Hammamet',
+      'Mahdia',
+      'Tozeur',
+      'Jendouba',
+      'El Kef',
+      'Béja',
+      'Kasserine',
+      'Sidi Bouzid',
+      'Medenine',
+      'Tataouine',
+      'Kebili',
+    ];
+  }
+
+  /// Recherche locale parmi les villes tunisiennes
+  List<String> searchLocalCities(String query) {
+    final lowerQuery = query.toLowerCase();
+    return getTunisianCities()
+        .where((city) => city.toLowerCase().contains(lowerQuery))
+        .toList();
   }
 
   // Calculer la distance entre deux points en kilomètres (Haversine formula)

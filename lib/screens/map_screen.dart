@@ -135,6 +135,9 @@ class _MapScreenState extends State<MapScreen> {
       _showResults = false;
       _searchController.text = point.displayName;
     });
+
+    // IMPORTANT: Forcer la mise à jour du MapWidget
+    // En fermant et rouvrant les résultats, on force le rebuild
   }
 
   Future<void> _getCurrentLocation() async {
@@ -149,6 +152,7 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _selectedPoint = location;
           _isLoadingLocation = false;
+          _searchController.text = location.displayName;
         });
         _showSnackBar('Position actuelle obtenue', Colors.green);
       } else {
@@ -228,7 +232,10 @@ class _MapScreenState extends State<MapScreen> {
       body: Stack(
         children: [
           // La carte OpenStreetMap
+          // CORRECTION: Utiliser une clé unique pour forcer le rebuild
           MapWidget(
+            key: ValueKey(
+                '${_selectedPoint?.latitude}_${_selectedPoint?.longitude}_${_currentStartPoint?.latitude}_${_currentEndPoint?.latitude}'),
             startPoint: widget.selectMode ? _selectedPoint : _currentStartPoint,
             endPoint: _currentEndPoint,
             routePoints: _routePoints,

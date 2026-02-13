@@ -202,7 +202,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
                     labelText: 'Téléphone (optionnel)',
-                    hintText: '+33 6 12 34 56 78',
+                    hintText: '+216 50 000 000',
                     prefixIcon: const Icon(Icons.phone_outlined),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),

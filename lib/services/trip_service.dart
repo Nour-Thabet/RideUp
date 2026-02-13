@@ -3,11 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../models/trip.dart';
 import '../models/geo_point.dart';
 import 'map_service.dart';
+import 'user_service.dart'; // ✅ AJOUTER CET IMPORT
 
 class TripService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
   final MapService _mapService = MapService();
+  final UserService _userService = UserService(); // ✅ AJOUTER CETTE LIGNE
 
   // Collection des trajets
   CollectionReference get _tripsCollection => _firestore.collection('trips');
@@ -26,19 +28,42 @@ class TripService {
     bool discussionOk = true,
   }) async {
     try {
-      String? conducteurId = _auth.currentUser?.uid;
+      // 🔐 Vérifier utilisateur connecté
+      final conducteurId = _auth.currentUser?.uid;
       if (conducteurId == null) {
         throw Exception('Utilisateur non connecté');
       }
 
-      // Calculer la distance et la durée
+      // 👤 Récupérer l'utilisateur
+      final currentUser =
+          await _userService.getCurrentUser(); // ✅ UTILISER _userService
+
+      if (currentUser == null) {
+        throw Exception('Utilisateur introuvable');
+      }
+
+      // 🚗 Vérifier qu'il est conducteur
+      if (!currentUser.estConducteur) {
+        throw Exception('Vous devez être conducteur pour créer un trajet');
+      }
+
+      // 🚘 Vérifier les infos du véhicule (obligatoires)
+      if (currentUser.immatriculation == null ||
+          currentUser.immatriculation!.trim().isEmpty) {
+        throw Exception(
+          'Informations du véhicule manquantes. Veuillez compléter votre profil.',
+        );
+      }
+
+      // 🗺️ Calculer la distance et la durée
       final routeInfo = await _mapService.getRouteInfo(
         pointDepart,
         pointArrivee,
       );
 
-      Trip newTrip = Trip(
-        id: '', // Sera généré par Firestore
+      // 🧳 Créer le trajet
+      final Trip newTrip = Trip(
+        id: '',
         conducteurId: conducteurId,
         pointDepart: pointDepart,
         pointArrivee: pointArrivee,
@@ -57,9 +82,8 @@ class TripService {
         discussionOk: discussionOk,
       );
 
-      DocumentReference docRef = await _tripsCollection.add(
-        newTrip.toFirestore(),
-      );
+      // 💾 Enregistrer dans Firestore
+      final docRef = await _tripsCollection.add(newTrip.toFirestore());
       return docRef.id;
     } catch (e) {
       print('Erreur lors de la création du trajet: $e');
@@ -141,21 +165,18 @@ class TripService {
 
       QuerySnapshot snapshot = await query.get();
 
-      List<Trip> trips = snapshot.docs
-          .map((doc) => Trip.fromFirestore(doc))
-          .toList();
+      List<Trip> trips =
+          snapshot.docs.map((doc) => Trip.fromFirestore(doc)).toList();
 
       // Filtrer par ville (car Firestore ne peut pas faire de recherche sur plusieurs champs)
       trips = trips.where((trip) {
-        bool departMatch =
-            trip.pointDepart.city?.toLowerCase().contains(
-              villeDepart.toLowerCase(),
-            ) ??
+        bool departMatch = trip.pointDepart.city?.toLowerCase().contains(
+                  villeDepart.toLowerCase(),
+                ) ??
             false;
-        bool arriveeMatch =
-            trip.pointArrivee.city?.toLowerCase().contains(
-              villeArrivee.toLowerCase(),
-            ) ??
+        bool arriveeMatch = trip.pointArrivee.city?.toLowerCase().contains(
+                  villeArrivee.toLowerCase(),
+                ) ??
             false;
 
         return departMatch && arriveeMatch;

@@ -168,13 +168,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: Colors.blue.shade100,
-                      backgroundImage:
-                          otherUser.photoUrl != null &&
+                      backgroundImage: otherUser.photoUrl != null &&
                               otherUser.photoUrl!.isNotEmpty
                           ? NetworkImage(otherUser.photoUrl!)
                           : null,
-                      child:
-                          otherUser.photoUrl == null ||
+                      child: otherUser.photoUrl == null ||
                               otherUser.photoUrl!.isEmpty
                           ? Text(
                               otherUser.initiales,

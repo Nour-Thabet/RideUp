@@ -1,13 +1,95 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/user.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
   // Collection des utilisateurs
   CollectionReference get _usersCollection => _firestore.collection('users');
+
+  // ==================== METTRE À JOUR LE FCM TOKEN ====================
+  Future<void> updateFcmToken() async {
+    try {
+      // 1. Vérifier si l'utilisateur est connecté
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        print('❌ Aucun utilisateur connecté');
+        return;
+      }
+
+      // 2. Demander la permission pour les notifications
+      NotificationSettings settings = await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        print('❌ Permissions de notification refusées');
+        return;
+      }
+
+      // 3. Obtenir le FCM Token
+      String? token = await _messaging.getToken();
+
+      if (token == null) {
+        print('❌ Impossible d\'obtenir le FCM Token');
+        return;
+      }
+
+      print('✅ FCM Token obtenu: $token');
+
+      // 4. Sauvegarder le token dans Firestore
+      await _usersCollection.doc(currentUser.uid).update({
+        'fcmToken': token,
+        'lastTokenUpdate': FieldValue.serverTimestamp(),
+      });
+
+      print('✅ FCM Token sauvegardé dans Firestore');
+
+      // 5. Écouter les rafraîchissements de token
+      _messaging.onTokenRefresh.listen((newToken) {
+        _updateTokenInFirestore(currentUser.uid, newToken);
+      });
+    } catch (e) {
+      print('❌ Erreur lors de la mise à jour du FCM Token: $e');
+    }
+  }
+
+  /// Mettre à jour le token en cas de rafraîchissement
+  Future<void> _updateTokenInFirestore(String userId, String token) async {
+    try {
+      await _usersCollection.doc(userId).update({
+        'fcmToken': token,
+        'lastTokenUpdate': FieldValue.serverTimestamp(),
+      });
+      print('✅ FCM Token rafraîchi et mis à jour');
+    } catch (e) {
+      print('❌ Erreur lors de la mise à jour du token: $e');
+    }
+  }
+
+  /// Supprimer le FCM Token (à la déconnexion)
+  Future<void> removeFcmToken() async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) return;
+
+      await _usersCollection.doc(currentUser.uid).update({
+        'fcmToken': FieldValue.delete(),
+      });
+
+      await _messaging.deleteToken();
+      print('✅ FCM Token supprimé');
+    } catch (e) {
+      print('❌ Erreur lors de la suppression du FCM Token: $e');
+    }
+  }
 
   // ==================== CRÉER UN UTILISATEUR ====================
   Future<void> createUser({
@@ -112,20 +194,6 @@ class UserService {
     }
   }
 
-  // ==================== METTRE À JOUR (VERSION ANCIENNE - GARDÉE POUR COMPATIBILITÉ) ====================
-  Future<void> updateUserLegacy(
-    String userId,
-    Map<String, dynamic> data,
-  ) async {
-    try {
-      await _usersCollection.doc(userId).update(data);
-      print('✅ Utilisateur mis à jour (legacy): $userId');
-    } catch (e) {
-      print('❌ Erreur lors de la mise à jour de l\'utilisateur: $e');
-      rethrow;
-    }
-  }
-
   // ==================== ACTIVER LE MODE CONDUCTEUR ====================
   Future<void> activerModeConducteur({
     required String userId,
@@ -216,8 +284,7 @@ class UserService {
       });
 
       print(
-        '✅ Note mise à jour pour $userId: $nouvelleNoteMoyenne ($nouveauNombreAvis avis)',
-      );
+          '✅ Note mise à jour pour $userId: $nouvelleNoteMoyenne ($nouveauNombreAvis avis)');
     } catch (e) {
       print('❌ Erreur lors de la mise à jour de la note: $e');
       rethrow;
@@ -225,7 +292,7 @@ class UserService {
   }
 
   // ==================== STREAM DE L'UTILISATEUR ACTUEL ====================
-  Stream<User?> get currentUserStream {
+  Stream<User?> getCurrentUserStream() {
     String? userId = _auth.currentUser?.uid;
     if (userId == null) return Stream.value(null);
 
@@ -239,19 +306,6 @@ class UserService {
 
   // ==================== STREAM D'UN UTILISATEUR SPÉCIFIQUE ====================
   Stream<User?> getUserStream(String userId) {
-    return _usersCollection.doc(userId).snapshots().map((doc) {
-      if (doc.exists) {
-        return User.fromFirestore(doc);
-      }
-      return null;
-    });
-  }
-
-  // ==================== OBTENIR LE STREAM DE L'UTILISATEUR ACTUEL (MÉTHODE ALTERNATIVE) ====================
-  Stream<User?> getCurrentUserStream() {
-    String? userId = _auth.currentUser?.uid;
-    if (userId == null) return Stream.value(null);
-
     return _usersCollection.doc(userId).snapshots().map((doc) {
       if (doc.exists) {
         return User.fromFirestore(doc);
@@ -312,17 +366,6 @@ class UserService {
     } catch (e) {
       print('❌ Erreur lors de la suppression de l\'utilisateur: $e');
       rethrow;
-    }
-  }
-
-  // ==================== OBTENIR TOUS LES UTILISATEURS (ADMIN) ====================
-  Future<List<User>> getAllUsers() async {
-    try {
-      QuerySnapshot snapshot = await _usersCollection.get();
-      return snapshot.docs.map((doc) => User.fromFirestore(doc)).toList();
-    } catch (e) {
-      print('❌ Erreur lors de la récupération des utilisateurs: $e');
-      return [];
     }
   }
 

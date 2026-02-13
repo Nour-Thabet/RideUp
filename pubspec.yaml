@@ -1,11 +1,12 @@
 name: covoiturage
 description: "Application de covoiturage avec Flutter et Firebase"
-publish_to: 'none' # Retire cette ligne si tu veux publier sur pub.dev
+
+publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.0  # Flutter 3.9+ n'existe pas encore en décembre 2025 → utilise une version stable réelle
+  sdk: '>=3.5.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -15,6 +16,8 @@ dependencies:
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.4.4
+  firebase_storage: ^12.3.3
+  firebase_messaging: ^15.1.0
 
   # Carte et localisation
   flutter_map: ^7.0.0
@@ -23,8 +26,9 @@ dependencies:
   http: ^1.2.2
 
   # UI & Utilitaires
-  intl: ^0.19.0  # Pour le formatage des dates en français
+  intl: ^0.19.0
   cupertino_icons: ^1.0.8
+  provider: ^6.1.2
 
 dev_dependencies:
   flutter_test:
@@ -32,16 +36,30 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.1
 
-# Configuration des icônes d'application
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/images/app_icon.png"
-  adaptive_icon_background: "#FFFFFF"  # Fond pour l'icône adaptative Android
-  # adaptive_icon_foreground: "assets/images/app_icon_foreground.png"  # Optionnel
+  adaptive_icon_background: "#FFFFFF"
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/
+    - assets/avatars/avatar_1.png
+    - assets/avatars/avatar_2.png
+    - assets/avatars/avatar_3.png
+    - assets/avatars/avatar_4.png
+    - assets/avatars/avatar_5.png
+    - assets/avatars/avatar_6.png
+    - assets/avatars/avatar_7.png
+    - assets/avatars/avatar_8.png
+    - assets/avatars/avatar_9.png
+    - assets/avatars/avatar_10.png
+    - assets/avatars/avatar_11.png
+    - assets/avatars/avatar_12.png
+    - assets/avatars/avatar_13.png
+    - assets/avatars/avatar_14.png
+    - assets/avatars/avatar_15.png
+    - assets/avatars/avatar_16.png

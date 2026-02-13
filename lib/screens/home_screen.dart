@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../models/user.dart' as app_user;
+import '../models/trip.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/user_service.dart';
+import '../services/notification_service.dart';
+import '../services/trip_service.dart';
+import '../widgets/avatar_widget.dart'; // ✅ Import du widget avatar
 import 'map_screen.dart';
 import 'add_trip_screen.dart';
 import 'search_trips_screen.dart';
@@ -12,8 +16,6 @@ import 'messages_screen.dart';
 import 'trip_detail_screen.dart';
 import 'edit_profile_screen.dart';
 import 'user_ratings_screen.dart';
-import '../models/trip.dart';
-import '../services/trip_service.dart';
 import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,11 +26,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AuthService _authService = AuthService();
-  final MessageService _messageService = MessageService();
   int _selectedIndex = 0;
 
-  // Les différents onglets
   final List<Widget> _screens = [
     const HomeTab(),
     const SearchTripsScreen(),
@@ -36,7 +35,14 @@ class _HomeScreenState extends State<HomeScreen> {
     const ProfileTab(),
   ];
 
-  void _logout() async {
+  @override
+  void initState() {
+    super.initState();
+    // Mise à jour du FCM Token au démarrage
+    UserService().updateFcmToken();
+  }
+
+  Future<void> _logout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -57,8 +63,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (shouldLogout == true && mounted) {
-      await _authService.signOut();
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      try {
+        await UserService().removeFcmToken();
+        await AuthService().signOut();
+        if (mounted) {
+          Navigator.of(context)
+              .pushNamedAndRemoveUntil('/login', (route) => false);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur lors de la déconnexion: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -68,54 +86,39 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Covoiturage'),
         actions: [
-          // Badge pour les messages non lus
+          // Badge messages non lus
           StreamBuilder<int>(
-            stream: _messageService.getTotalUnreadCount(),
+            stream: MessageService().getTotalUnreadCount(),
             builder: (context, snapshot) {
               final unreadCount = snapshot.data ?? 0;
-
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.message),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MessagesScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  if (unreadCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          unreadCount > 9 ? '9+' : unreadCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
+              return _buildBadgeIcon(
+                icon: Icons.message,
+                count: unreadCount,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MessagesScreen()),
+                ),
               );
             },
           ),
+
+          // Badge notifications non lues
+          StreamBuilder<int>(
+            stream: NotificationService().getUnreadCount(),
+            builder: (context, snapshot) {
+              final unreadNotif = snapshot.data ?? 0;
+              return _buildBadgeIcon(
+                icon: Icons.notifications_outlined,
+                count: unreadNotif,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen()),
+                ),
+              );
+            },
+          ),
+
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Se déconnecter',
@@ -126,27 +129,53 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        onTap: (index) => setState(() => _selectedIndex = index),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Rechercher',
-          ),
+              icon: Icon(Icons.search), label: 'Rechercher'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.directions_car),
-            label: 'Mes trajets',
-          ),
+              icon: Icon(Icons.directions_car), label: 'Mes trajets'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
+    );
+  }
+
+  Widget _buildBadgeIcon({
+    required IconData icon,
+    required int count,
+    required VoidCallback onPressed,
+  }) {
+    return Stack(
+      children: [
+        IconButton(icon: Icon(icon), onPressed: onPressed),
+        if (count > 0)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              child: Text(
+                count > 9 ? '9+' : count.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -157,7 +186,7 @@ class HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = auth.FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -165,9 +194,10 @@ class HomeTab extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: Implémenter les notifications
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            ),
           ),
         ],
       ),
@@ -177,7 +207,7 @@ class HomeTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Message de bienvenue avec nom/prénom
+              // ✅ Message de bienvenue avec AvatarWidget
               StreamBuilder<app_user.User?>(
                 stream: UserService().getCurrentUserStream(),
                 builder: (context, snapshot) {
@@ -189,19 +219,13 @@ class HomeTab extends StatelessWidget {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          CircleAvatar(
+                          AvatarWidget(
+                            // ✅ Utilisation du widget
+                            photoUrl: appUser?.photoUrl,
+                            initiales: appUser?.initiales ??
+                                user?.email?.substring(0, 1).toUpperCase() ??
+                                'U',
                             radius: 30,
-                            backgroundColor: Colors.blue.shade100,
-                            child: Text(
-                              appUser?.initiales ??
-                                  user?.email?.substring(0, 1).toUpperCase() ??
-                                  'U',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
-                              ),
-                            ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -251,14 +275,10 @@ class HomeTab extends StatelessWidget {
                       icon: Icons.add_circle_outline,
                       title: 'Proposer\nun trajet',
                       color: Colors.blue,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AddTripScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => AddTripScreen()),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -267,14 +287,11 @@ class HomeTab extends StatelessWidget {
                       icon: Icons.search,
                       title: 'Rechercher\nun trajet',
                       color: Colors.green,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => SearchTripsScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SearchTripsScreen()),
+                      ),
                     ),
                   ),
                 ],
@@ -288,14 +305,10 @@ class HomeTab extends StatelessWidget {
                       icon: Icons.map_outlined,
                       title: 'Voir\nla carte',
                       color: Colors.orange,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const MapScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MapScreen()),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -304,14 +317,11 @@ class HomeTab extends StatelessWidget {
                       icon: Icons.message_outlined,
                       title: 'Messages',
                       color: Colors.purple,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MessagesScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const MessagesScreen()),
+                      ),
                     ),
                   ),
                 ],
@@ -361,10 +371,8 @@ class HomeTab extends StatelessWidget {
                         child: ListTile(
                           leading: const CircleAvatar(
                             backgroundColor: Colors.blue,
-                            child: Icon(
-                              Icons.directions_car,
-                              color: Colors.white,
-                            ),
+                            child:
+                                Icon(Icons.directions_car, color: Colors.white),
                           ),
                           title: Text(
                             '${trip.pointDepart.city} → ${trip.pointArrivee.city}',
@@ -374,18 +382,15 @@ class HomeTab extends StatelessWidget {
                             ),
                           ),
                           subtitle: Text(
-                            '${trip.placesDisponibles} places • ${trip.prix.toStringAsFixed(2)} €',
+                            '${trip.placesDisponibles} places • ${trip.prix.toStringAsFixed(2)} DT',
                           ),
                           trailing: const Icon(Icons.arrow_forward_ios),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    TripDetailScreen(trip: trip),
-                              ),
-                            );
-                          },
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TripDetailScreen(trip: trip),
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -406,9 +411,8 @@ class ProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = auth.FirebaseAuth.instance.currentUser;
     final userService = UserService();
-    final authService = AuthService();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
@@ -420,31 +424,22 @@ class ProfileTab extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Avatar et infos utilisateur
               Center(
                 child: Column(
                   children: [
-                    CircleAvatar(
+                    // ✅ Avatar avec AvatarWidget
+                    AvatarWidget(
+                      photoUrl: appUser?.photoUrl,
+                      initiales: appUser?.initiales ??
+                          user?.email?.substring(0, 1).toUpperCase() ??
+                          'U',
                       radius: 50,
-                      backgroundColor: Colors.blue.shade100,
-                      child: Text(
-                        appUser?.initiales ??
-                            user?.email?.substring(0, 1).toUpperCase() ??
-                            'U',
-                        style: const TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       appUser?.nomComplet ?? user?.email ?? 'Utilisateur',
                       style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     if (appUser != null && appUser.nombreAvis > 0)
@@ -456,9 +451,7 @@ class ProfileTab extends StatelessWidget {
                           Text(
                             '${appUser.noteMoyenne.toStringAsFixed(1)} (${appUser.nombreAvis} avis)',
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
+                                fontSize: 14, color: Colors.grey[600]),
                           ),
                         ],
                       ),
@@ -471,56 +464,41 @@ class ProfileTab extends StatelessWidget {
               _ProfileOption(
                 icon: Icons.person_outline,
                 title: 'Modifier le profil',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EditProfileScreen(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => EditProfileScreen()),
+                ),
               ),
               _ProfileOption(
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => NotificationsScreen(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen()),
+                ),
               ),
               _ProfileOption(
                 icon: Icons.star_outline,
                 title: 'Mes évaluations',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => UserRatingsScreen(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserRatingsScreen()),
+                ),
               ),
               _ProfileOption(
                 icon: Icons.settings_outlined,
                 title: 'Paramètres',
-                onTap: () {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('À venir')));
-                },
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('À venir')),
+                ),
               ),
               _ProfileOption(
                 icon: Icons.help_outline,
                 title: 'Aide et support',
-                onTap: () {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('À venir')));
-                },
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('À venir')),
+                ),
               ),
               const Divider(height: 32),
               _ProfileOption(
@@ -528,10 +506,20 @@ class ProfileTab extends StatelessWidget {
                 title: 'Se déconnecter',
                 color: Colors.red,
                 onTap: () async {
-                  await authService.signOut();
-                  Navigator.of(
-                    context,
-                  ).pushNamedAndRemoveUntil('/login', (route) => false);
+                  try {
+                    await UserService().removeFcmToken();
+                    await AuthService().signOut();
+                    if (context.mounted) {
+                      Navigator.of(context)
+                          .pushNamedAndRemoveUntil('/login', (route) => false);
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Erreur: $e')),
+                      );
+                    }
+                  }
                 },
               ),
             ],
@@ -543,7 +531,6 @@ class ProfileTab extends StatelessWidget {
 }
 
 // ==================== WIDGETS RÉUTILISABLES ====================
-
 class _QuickActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -573,10 +560,8 @@ class _QuickActionCard extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
             ],
           ),

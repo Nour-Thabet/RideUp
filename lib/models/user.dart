@@ -5,6 +5,8 @@ class User {
   final String nom;
   final String prenom;
   final String email;
+  //*** */
+  final String? fcmToken;
   final String? telephone;
   final String? photoUrl;
   final double noteMoyenne;
@@ -26,6 +28,7 @@ class User {
     required this.nom,
     required this.prenom,
     required this.email,
+    this.fcmToken,
     this.telephone,
     this.photoUrl,
     this.noteMoyenne = 0.0,
@@ -50,6 +53,8 @@ class User {
       nom: data['nom'] ?? '',
       prenom: data['prenom'] ?? '',
       email: data['email'] ?? '',
+      //*9999
+      fcmToken: data['fcmToken'],
       telephone: data['telephone'],
       photoUrl: data['photoUrl'],
       noteMoyenne: (data['noteMoyenne'] ?? 0.0).toDouble(),
@@ -73,6 +78,8 @@ class User {
       'nom': nom,
       'prenom': prenom,
       'email': email,
+      //9999
+      'fcmToken': fcmToken,
       'telephone': telephone,
       'photoUrl': photoUrl,
       'noteMoyenne': noteMoyenne,
@@ -105,6 +112,8 @@ class User {
     String? nom,
     String? prenom,
     String? email,
+    //999
+    String? fcmToken,
     String? telephone,
     String? photoUrl,
     double? noteMoyenne,
@@ -124,6 +133,8 @@ class User {
       nom: nom ?? this.nom,
       prenom: prenom ?? this.prenom,
       email: email ?? this.email,
+      //9999
+      fcmToken: fcmToken ?? this.fcmToken,
       telephone: telephone ?? this.telephone,
       photoUrl: photoUrl ?? this.photoUrl,
       noteMoyenne: noteMoyenne ?? this.noteMoyenne,

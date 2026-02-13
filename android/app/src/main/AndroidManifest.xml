@@ -20,6 +20,18 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+        <service
+            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.messaging.RECEIVE" />
+            </intent-filter>
+        </service>
+
+        <!-- Métadonnées pour les notifications -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="ride_notifications" />
 
         <!-- Clé API Google Maps -->
         <meta-data
